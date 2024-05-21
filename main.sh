@@ -1,40 +1,65 @@
 #!/bin/bash
 
-# Frissitjük a rendszert
-
-update_system() {
-    echo "Hello Radius Elsőnek frissitem a szervert!"
-    sudo apt-get update
-    sudo apt-get upgrade -y
+greeting(){
+    echo"Üdvözöllek a Lusta Rendszergazda IPManager_1.2 felhasználójaként."
 }
 
-# Adatok bekérése 
-echo "Kérlek ad meg a szükséges adatokért"
-read -p "Használt port: " use_port
-read -p "IP cím: " ip_address
-read -p "Hálózati maszk: " netmask
-read -p "Átjáró címe: " gateway
-read -p "DNS szerver címe: " dns
+work(){
+# Kérje be a felhasználótól a szükséges adatokat
+read -p "Kérem az IP címet (például: 192.168.10.22/24): " ip_cim
+read -p "Kérem a névszerver IP címeit (például: 8.8.8.8,1.1.1.1): " nameservers
+read -p "Kérem az útvonal irányításához szükséges útválasztót (például: 192.168.10.1): " gateway
 
-# Konfog fájl modosítása 
-update_config_file() {
-    source_config_path="config_raw.txt" #ez a nyers fájl
-    destination_config_path="/etc/netplan/01-netcfg.yaml"
-{
-    echo "network:"
-        echo "    version: 2"
-        echo "    ethernets:"
-        echo "      [${use_port}]:"
-        echo "            dhcp4: no"
-        echo "            addresses: [${ip_address}/24]"
-        echo "            gateway4: ${gateway}"
-        echo "            nameservers:"
-        echo "                addresses: [${dns}]"
-    } > "${destination_config_path}"
+# A névszerverek feldolgozása
+IFS=',' read -r -a nameserver_array <<< "$nameservers"
+
+# Fájl helye
+cel_hely="/etc/netplan"
+fajlnev="00-installer-config.yaml"
+backup_fajlnev="00-installer-config-org.yaml"
+
+# Ellenőrizze, hogy létezik-e a cél fájl, és ha igen, nevezze át
+if [ -f "$cel_hely/$fajlnev" ]; then
+    mv "$cel_hely/$fajlnev" "$cel_hely/$backup_fajlnev"
+fi
+
+# Az adatokat írjuk a fájlba
+echo "# Static IP" > "$cel_hely/$fajlnev"
+echo "network:" >> "$cel_hely/$fajlnev"
+echo "  ethernets:" >> "$cel_hely/$fajlnev"
+echo "    ens18:" >> "$cel_hely/$fajlnev"
+echo "      dhcp4: no" >> "$cel_hely/$fajlnev"
+echo "      addresses:" >> "$cel_hely/$fajlnev"
+echo "        - $ip_cim" >> "$cel_hely/$fajlnev"
+echo "      nameservers:" >> "$cel_hely/$fajlnev"
+echo "        addresses:" >> "$cel_hely/$fajlnev"
+
+for ns in "${nameserver_array[@]}"
+do
+  echo "          - $ns" >> "$cel_hely/$fajlnev"
+done
+
+echo "      routes:" >> "$cel_hely/$fajlnev"
+echo "        - to: 0.0.0.0/0" >> "$cel_hely/$fajlnev"
+echo "          via: $gateway" >> "$cel_hely/$fajlnev"
+echo "  version: 2" >> "$cel_hely/$fajlnev"
+
+echo "Az adatok sikeresen elmentve a $cel_hely/$fajlnev fájlba."
 }
 
-#Fügvények futtatása
-update_system
-update_config_file
+reboot() {
+# Felajánlja az újraindítás lehetőségét
+read -p "Szeretné újraindítani a rendszert? (igen/nem): " ujrainditas
 
-echo "A frissités megtörtént az IP cím beállítások megtörténtek"
+if [ "$ujrainditas" == "igen" ]; then
+    echo "A rendszer újraindítása..."
+    sudo reboot
+else
+    echo "A rendszer nem lesz újraindítva."
+fi
+}
+
+greeting 
+work
+reboot
+
